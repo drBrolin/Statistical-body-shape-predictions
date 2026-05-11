@@ -51,7 +51,6 @@ function adjustedLM = landmarkAdjust(regressionRow)
         landmarksAdj(pairs(i,2),3) = landmarksAdj(pairs(i,1),3); % set the left and right side to the same z-coordinate
     end
 
-    landmarksAdj(1,2) = 0;
     for i=1:size(midPoints,2)
         landmarksAdj(midPoints(i),2) = 0;
     end

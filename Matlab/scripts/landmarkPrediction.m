@@ -1,15 +1,15 @@
 function landmarkCoordinates = landmarkPrediction(sex, anthroMeasurements)
     if sex == 1
-        load_A_LM = load('statBodyModel\A_LM_female.mat');
-        load_dStat_Y_LM = load('statBodyModel\dStat_Y_LM_female.mat');
-        load_dStat_Z_LM = load('statBodyModel\dStat_Z_LM_female.mat');
-        load_G_p_LM = load('statBodyModel\G_p_LM_female.mat');
+        load_A_LM = load('statBodyModel/A_LM_female.mat');
+        load_dStat_Y_LM = load('statBodyModel/dStat_Y_LM_female.mat');
+        load_dStat_Z_LM = load('statBodyModel/dStat_Z_LM_female.mat');
+        load_G_p_LM = load('statBodyModel/G_p_LM_female.mat');
 
     elseif sex == 0
-        load_A_LM = load('statBodyModel\A_LM_male.mat');
-        load_dStat_Y_LM = load('statBodyModel\dStat_Y_LM_male.mat');
-        load_dStat_Z_LM = load('statBodyModel\dStat_Z_LM_male.mat');
-        load_G_p_LM = load('statBodyModel\G_p_LM_male.mat');
+        load_A_LM = load('statBodyModel/A_LM_male.mat');
+        load_dStat_Y_LM = load('statBodyModel/dStat_Y_LM_male.mat');
+        load_dStat_Z_LM = load('statBodyModel/dStat_Z_LM_male.mat');
+        load_G_p_LM = load('statBodyModel/G_p_LM_male.mat');
     end
     A_LM = load_A_LM.A;
     dStat_Y_LM = load_dStat_Y_LM.dStat_Y;
@@ -26,20 +26,14 @@ function landmarkCoordinates = landmarkPrediction(sex, anthroMeasurements)
     resp = size(dStat_Y_LM,2);
     Z_PCs =  size(G_p_LM,1);
     Y_test_PC = zeros(resp,1)';
-    Z_value = zeros(1,pred);
-    for i=1:pred
-         Z_value(i) = (Z_test_LM(i)-dStat_Z_LM(1,i))/dStat_Z_LM(2,i);
-    end
+    Z_value = (Z_test_LM - dStat_Z_LM(1,:)) ./ dStat_Z_LM(2,:);
     
     %%% PCA regression %%%
     W_value = Z_value*A_LM;
     W_p = W_value(:,1:Z_PCs);
     Y_value_S_PC = W_p*G_p_LM;
     
-    for i=1:resp
-        Y_test_PC(i) = Y_value_S_PC(i)*dStat_Y_LM(2,i)+dStat_Y_LM(1,i);
-    end
-    predicted_LM = Y_test_PC;
+    predicted_LM = Y_value_S_PC .* dStat_Y_LM(2,:) + dStat_Y_LM(1,:);
     disp('Predicted landmark data with regression analysis.');
     
     %%% Correction to get symmetry on both sides of sagittal plane %%%
