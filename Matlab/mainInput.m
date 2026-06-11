@@ -56,6 +56,65 @@ adjustedLM = scalingRatio*adjustedLM;
 jointCenterT = scalingRatio*jointCenterT;
 saveMesh(meshModel,[modelName,'_Scaled']); % Meshmodel after scaling based on stature value.
 
+%% Additional points, make into functions for specific usages (modelling and driver ergonomics etc.)
+%%% Calculate midpoint for joints on lower arms and legs %%% 
+% Maybe handled in later code of IPS?
+jointCenterT(jc.RtUpperArmMid,:) = (jointCenterT(jc.RtShoulder,:)+jointCenterT(jc.RtElbow,:))/2;
+jointCenterT(jc.LtUpperArmMid,:) = (jointCenterT(jc.LtShoulder,:)+jointCenterT(jc.LtElbow,:))/2;
+jointCenterT(jc.RtLowerArmMid,:) = (jointCenterT(jc.RtElbow,:)+jointCenterT(jc.RtWrist,:))/2;
+jointCenterT(jc.LtLowerArmMid,:) = (jointCenterT(jc.LtElbow,:)+jointCenterT(jc.LtWrist,:))/2;
+jointCenterT(jc.RtLowerLegMid,:) = (jointCenterT(jc.RtKnee,:)+jointCenterT(jc.RtAnkle,:))/2;
+jointCenterT(jc.LtLowerLegMid,:) = (jointCenterT(jc.LtKnee,:)+jointCenterT(jc.LtAnkle,:))/2;
+
+%% Max Abdominal Depth %%
+maxAbdominalDepth = mean(meshModel(r.abdomenDepth,:));
+jointCenterT(jc.AbdominalDepth,:) = [maxAbdominalDepth(1)  0   maxAbdominalDepth(3)];
+
+%%% Extra landmarks on widest hip-points %%%
+widthHip = meshModel(r.pelvisLegs,:);
+widthHip = widthHip(widthHip(:,3) < adjustedLM(lm.Crotch,3), :);
+[maxHipBrth,indxmaxHipBrth] = max(widthHip(:,2));
+[minHipBrth,indxminHipBrth] = min(widthHip(:,2));
+hipHeight = (widthHip(indxmaxHipBrth,3)+widthHip(indxminHipBrth,3))/2;
+hipX = (jointCenterT(jc.LtHip,1) - jointCenterT(jc.LtKnee,1))*(jointCenterT(jc.LtHip,3) - hipHeight)/(jointCenterT(jc.LtHip,3) - jointCenterT(jc.LtKnee,3));
+jointCenterT(jc.RtHipWidth,:) = [(jointCenterT(jc.LtHip,1)-hipX) minHipBrth  hipHeight];
+jointCenterT(jc.LtHipWidth,:) = [(jointCenterT(jc.LtHip,1)-hipX) maxHipBrth  hipHeight];
+hipYBone = (jointCenterT(jc.LtHip,2) - jointCenterT(jc.LtKnee,2))*(jointCenterT(jc.LtHip,3) - hipHeight)/(jointCenterT(jc.LtHip,3) - jointCenterT(jc.LtKnee,3));
+jointCenterT(jc.RtHipBone,:) = [jointCenterT(jc.LtHipWidth,1)    (jointCenterT(jc.RtHip,2)-hipYBone)  hipHeight];
+jointCenterT(jc.LtHipBone,:) = [jointCenterT(jc.LtHipWidth,1)    (jointCenterT(jc.LtHip,2)+hipYBone)  hipHeight];
+
+%%% Extra landmarks on buttocks surface
+pelvLeg = meshModel(r.pelvisLegs,:);
+[minButtockRt,~] = min(pelvLeg(pelvLeg(:,2) < 0, 1));
+[minButtockLt,~] = min(pelvLeg(pelvLeg(:,2) > 0, 1));
+jointCenterT(jc.RtButtock,:) = [minButtockRt jointCenterT(jc.RtHip,2:3)];
+jointCenterT(jc.LtButtock,:) = [minButtockLt jointCenterT(jc.LtHip,2:3)];
+
+% Add T8 as landmark.
+T8T9 = [0.920215*(jointCenterT(jc.T6T7,1)-jointCenterT(jc.L5S1,1))+jointCenterT(jc.L5S1,1)  0  0.856305*(jointCenterT(jc.T6T7,3)-jointCenterT(jc.L5S1,3))+jointCenterT(jc.L5S1,3)];
+T8   = [0.953711*(jointCenterT(jc.T6T7,1)-jointCenterT(jc.L5S1,1))+jointCenterT(jc.L5S1,1)  0  0.892418*(jointCenterT(jc.T6T7,3)-jointCenterT(jc.L5S1,3))+jointCenterT(jc.L5S1,3)];
+T7T8 = [0.981990*(jointCenterT(jc.T6T7,1)-jointCenterT(jc.L5S1,1))+jointCenterT(jc.L5S1,1)  0  0.928733*(jointCenterT(jc.T6T7,3)-jointCenterT(jc.L5S1,3))+jointCenterT(jc.L5S1,3)];
+
+T8Vec = T7T8-T8T9;
+kT8 = T8Vec(3)/T8Vec(1);
+kT8Inv = -1/kT8;
+mT8Inv = T8(3)-kT8Inv*T8(1);
+
+% Torso 4678:5446
+closeT8 = zeros(numel(r.torso),4);
+findClose = 1;
+for n=r.torso
+    if meshModel(n,1)<T8(1) && meshModel(n,2)>-10 && meshModel(n,2)<10 && (meshModel(n,3)<T8(3)+40) && (meshModel(n,3)>T8(3)-40)
+        closeT8(findClose,:) = [n meshModel(n,:)];
+        findClose = findClose+1;
+%         plot3(meshModel(n,1),meshModel(n,2),meshModel(n,3),'bo','MarkerEdgeColor','b','MarkerFaceColor','b','MarkerSize',2); hold on;
+    end
+end
+closeT8 = closeT8(1:findClose-1,:);
+backT8 = mean(closeT8(:,2));
+adjustedLM(lm.T8,:) = [backT8    0   kT8Inv*backT8+mT8Inv];
+
+
 %% ROTATE MANIKIN TO Y=UP %%
 meshModel = [meshModel(:,1) meshModel(:,3) -meshModel(:,2)];
 jointCenterT = [jointCenterT(:,1) jointCenterT(:,3) -jointCenterT(:,2)];
