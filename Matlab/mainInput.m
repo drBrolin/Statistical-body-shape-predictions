@@ -1,13 +1,17 @@
 clearvars; clc;
-clf;
+
 tic
-sex = 0; % Female = 1, Male = 0
+sex = 1; % Female = 1, Male = 0
 % Predictive anthropometric variables, possible to change. See measurement list below.
 pred_id = [3 4 5]; % Age = 3, Weight = 4, Stature = 5
 
+% age = 27; % (year) Ex. 41
+% stature = 1646; % (mm) Ex. 1633 el. 1880
+% weight = 57.4; % (kg) Ex. 73 el. 82
+
 age = 41; % (year) Ex. 41
-stature = 1880; % (mm) Ex. 1633 
-weight = 82; % (kg) Ex. 73 
+stature = 1633; % (mm) Ex. 1633 el. 1880
+weight = 73; % (kg) Ex. 73 el. 82
 
 Z_test = [age weight stature]; % If predictive variables are changed, add them to this Z_test variable.
 
@@ -50,12 +54,27 @@ scalingRatio = stature/maxHt;
 meshModel = scalingRatio*meshModel;
 adjustedLM = scalingRatio*adjustedLM;
 jointCenterT = scalingRatio*jointCenterT;
-
 saveMesh(meshModel,[modelName,'_Scaled']); % Meshmodel after scaling based on stature value.
+
+%% ROTATE MANIKIN TO Y=UP %%
+meshModel = [meshModel(:,1) meshModel(:,3) -meshModel(:,2)];
+jointCenterT = [jointCenterT(:,1) jointCenterT(:,3) -jointCenterT(:,2)];
+adjustedLM = [adjustedLM(:,1) adjustedLM(:,3) -adjustedLM(:,2)];
+
+morphedMatchedMesh = saveMeshTpose(meshModel,modelName,sex); % Now returns the matchedMesh
 
 %% Create XYZ files for landmarks and joint centres %%
 saveXYZ(adjustedLM,modelName,1);
 saveXYZ(jointCenterT,modelName,0);
+
+% clf;
+% plot3(meshModel(r.headNeck,1),meshModel(r.headNeck,2),meshModel(r.headNeck,3),'ko','MarkerEdgeColor','k','MarkerFaceColor','k','MarkerSize',1); hold on;
+% plot3(meshModel(r.headTop,1),meshModel(r.headTop,2),meshModel(r.headTop,3),'ko','MarkerEdgeColor','k','MarkerFaceColor','k','MarkerSize',1); hold on;
+% 
+% figure(1);
+% grid;
+% xlabel('X'); ylabel('Y'); zlabel('Z')
+% axis equal; 
 
 % Meas id   Measurement/variable
 % 03	Age (year)
