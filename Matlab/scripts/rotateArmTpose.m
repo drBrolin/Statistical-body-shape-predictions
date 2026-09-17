@@ -332,8 +332,18 @@ function [meshModel, adjustedLM, jointCenter] = rotateArmTpose(meshModel, adjust
     jcChainTotal = jc.RtThumbCarpal:jc.RtThumbDist; %Right_Thumb
     [meshModel, jointCenter] = straightFingers(meshStart, meshEnd, jcChainTotal, meshModel, jointCenter, [jc.RtIndexCarpal,jc.RtThumbProx], insideHandTotalRight(:,2));
 
+    %% Make fingers parallel, pointing in the Y direction
+    jcChainTotal = jc.RtIndexCarpal:jc.RtIndexDist;
+    [meshModel, jointCenter] = parallelFingers(meshStart, meshEnd, jcChainTotal, meshModel, jointCenter, insideHandTotalRight(:,3));
+    jcChainTotal = jc.RtMiddleCarpal:jc.RtMiddleDist;
+    [meshModel, jointCenter] = parallelFingers(meshStart, meshEnd, jcChainTotal, meshModel, jointCenter, insideHandTotalRight(:,4));
+    jcChainTotal = jc.RtRingCarpal:jc.RtRingDist;
+    [meshModel, jointCenter] = parallelFingers(meshStart, meshEnd, jcChainTotal, meshModel, jointCenter, insideHandTotalRight(:,5));
+    jcChainTotal = jc.RtPinkyCarpal:jc.RtPinkyDist;
+    [meshModel, jointCenter] = parallelFingers(meshStart, meshEnd, jcChainTotal, meshModel, jointCenter, insideHandTotalRight(:,6));
+
     adjustedLM(lm.RtDactylion,:) = jointCenter(jc.RtMiddleDist,:);
-    
+
     %% Copy right side values to left side
     jointCenter(jc.LtIndexCarpal:jc.LtThumbDist,:) = jointCenter(jc.RtIndexCarpal:jc.RtThumbDist,:);
     jointCenter(jc.LtIndexCarpal:jc.LtThumbDist,2) = jointCenter(jc.LtIndexCarpal:jc.LtThumbDist,2)*-1;
@@ -435,4 +445,49 @@ function [meshModel, jointCenter] = straightFingers(meshStart, meshEnd, jcChainT
         end
         jointCenter(jcChain(3):jcChain(size(jcChain,2)),:) = (R * (jointCenter(jcChain(3):jcChain(size(jcChain,2)),:)-jcStart)')'+jcStart;  % Rotate JCs
     end
+end
+
+function [meshModel, jointCenter] = parallelFingers(meshStart, meshEnd, jcChainTotal, meshModel, jointCenter, insideFinger)
+    % Rotate the entire finger around its carpal (MCP) joint so it points
+    % along the global Y axis (negative Y for right hand, positive Y for left).
+    jcPivot = jcChainTotal(1);   % Carpal joint — rotation pivot
+    jcTip   = jcChainTotal(end); % Distal joint
+
+    vec  = jointCenter(jcTip, :) - jointCenter(jcPivot, :);
+    uvec = vec / norm(vec);
+
+    sideSign = sign(jointCenter(jcPivot, 2));
+    if sideSign == 0, sideSign = -1; end  % fallback: assume right hand
+    targetDir = [0, sideSign, 0];
+
+    rotAxis  = cross(uvec, targetDir);
+    sinTheta = norm(rotAxis);
+    cosTheta = dot(uvec, targetDir);
+
+    if sinTheta < 1e-10
+        return;  % already aligned
+    end
+
+    rotAxis = rotAxis / sinTheta;
+    theta   = atan2(sinTheta, cosTheta);
+
+    nx = rotAxis(1); ny = rotAxis(2); nz = rotAxis(3);
+    c = cos(theta);  s = sin(theta);
+
+    R = [ ...
+        c + nx^2*(1-c),     nx*ny*(1-c) - nz*s, nx*nz*(1-c) + ny*s;
+        ny*nx*(1-c) + nz*s, c + ny^2*(1-c),     ny*nz*(1-c) - nx*s;
+        nz*nx*(1-c) - ny*s, nz*ny*(1-c) + nx*s, c + nz^2*(1-c)
+    ];
+
+    jcStart = jointCenter(jcPivot, :);
+    jcEnd   = jointCenter(jcTip, :);
+    inside  = pointInSphere(meshModel(meshStart:meshEnd, :), jcEnd, norm(jcStart - jcEnd));
+
+    for i = 1:size(inside, 1)
+        if inside(i) && insideFinger(i)
+            meshModel(i+meshStart-1, :) = (R * (meshModel(i+meshStart-1, :) - jcStart)')' + jcStart;
+        end
+    end
+    jointCenter(jcChainTotal(2):jcChainTotal(end), :) = (R * (jointCenter(jcChainTotal(2):jcChainTotal(end), :) - jcStart)')' + jcStart;
 end
