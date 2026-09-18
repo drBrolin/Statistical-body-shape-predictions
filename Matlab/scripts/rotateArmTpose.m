@@ -448,37 +448,25 @@ function [meshModel, jointCenter] = straightFingers(meshStart, meshEnd, jcChainT
 end
 
 function [meshModel, jointCenter] = parallelFingers(meshStart, meshEnd, jcChainTotal, meshModel, jointCenter, insideFinger)
-    % Rotate the entire finger around its carpal (MCP) joint so it points
-    % along the global Y axis (negative Y for right hand, positive Y for left).
+    % Rotate the entire finger around its carpal (MCP) joint, about the
+    % global Z-axis only, so the finger becomes parallel to the YZ-plane
+    % (its X-component is zeroed while its Z-elevation is preserved).
     jcPivot = jcChainTotal(1);   % Carpal joint — rotation pivot
     jcTip   = jcChainTotal(end); % Distal joint
 
-    vec  = jointCenter(jcTip, :) - jointCenter(jcPivot, :);
-    uvec = vec / norm(vec);
+    vec = jointCenter(jcTip, :) - jointCenter(jcPivot, :);
 
     sideSign = sign(jointCenter(jcPivot, 2));
     if sideSign == 0, sideSign = -1; end  % fallback: assume right hand
-    targetDir = [0, sideSign, 0];
 
-    rotAxis  = cross(uvec, targetDir);
-    sinTheta = norm(rotAxis);
-    cosTheta = dot(uvec, targetDir);
-
-    if sinTheta < 1e-10
-        return;  % already aligned
+    if norm(vec(1:2)) < 1e-10
+        return;  % already parallel to the YZ-plane
     end
 
-    rotAxis = rotAxis / sinTheta;
-    theta   = atan2(sinTheta, cosTheta);
+    theta = sideSign*pi/2 - atan2(vec(2), vec(1));
 
-    nx = rotAxis(1); ny = rotAxis(2); nz = rotAxis(3);
     c = cos(theta);  s = sin(theta);
-
-    R = [ ...
-        c + nx^2*(1-c),     nx*ny*(1-c) - nz*s, nx*nz*(1-c) + ny*s;
-        ny*nx*(1-c) + nz*s, c + ny^2*(1-c),     ny*nz*(1-c) - nx*s;
-        nz*nx*(1-c) - ny*s, nz*ny*(1-c) + nx*s, c + nz^2*(1-c)
-    ];
+    R = [c -s 0; s c 0; 0 0 1];
 
     jcStart = jointCenter(jcPivot, :);
     jcEnd   = jointCenter(jcTip, :);
