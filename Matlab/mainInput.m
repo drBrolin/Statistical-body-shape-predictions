@@ -1,7 +1,28 @@
 clearvars; clc;
 
 tic
-sex = 1; % Female = 1, Male = 0
+
+% %% Lightness - start
+% sex = 1; % Female = 1, Male = 0
+% % Predictive anthropometric variables, possible to change. See measurement list below.
+% pred_id = [3 4 5 55 56 65]; % Age = 3, Weight = 4, Stature = 5, Chest circumference = 55, Waist circumference = 56 Bustpoint breadth = 65
+% 
+% % age = 27; % (year) Ex. 41
+% % stature = 1646; % (mm) Ex. 1633 el. 1880
+% % weight = 57.4; % (kg) Ex. 73 el. 82
+% 
+% age = 52; % (year) Ex. 41
+% stature = 1600; % (mm) Ex. 1633 el. 1880
+% weight = 75; % (kg) Ex. 73 el. 82
+% Chest_circumference = 1000; % Chest circumference (mm)
+% Waist_circumference = 700; %Waist circumference (mm)
+% Bustpoint_breadth = 200; % Bustpoint breadth (mm)
+% 
+% Z_test = [age weight stature Chest_circumference Waist_circumference Bustpoint_breadth]; % If predictive variables are changed, add them to this Z_test variable.
+% 
+% %% Lightness - end
+
+sex = 0; % Female = 1, Male = 0
 % Predictive anthropometric variables, possible to change. See measurement list below.
 pred_id = [3 4 5]; % Age = 3, Weight = 4, Stature = 5
 
@@ -9,16 +30,39 @@ pred_id = [3 4 5]; % Age = 3, Weight = 4, Stature = 5
 % stature = 1646; % (mm) Ex. 1633 el. 1880
 % weight = 57.4; % (kg) Ex. 73 el. 82
 
-age = 41; % (year) Ex. 41
-stature = 1633; % (mm) Ex. 1633 el. 1880
-weight = 73; % (kg) Ex. 73 el. 82
+% Male, 41, 1880, 82
+age = 30; % (year) Ex. 41
+stature = 1800; % (mm) Ex. 1633 el. 1880
+weight = 200; % (kg) Ex. 73 el. 82
+
+% age = 30; % (year) Ex. 41
+% stature = 1750; % (mm) Ex. 1633 el. 1880
+% weight = 60; % (kg) Ex. 73 el. 82
 
 Z_test = [age weight stature]; % If predictive variables are changed, add them to this Z_test variable.
+
+% pred_id = [3	5	19	21	29  39 53]; 
+% % 03	Age (year)
+% % 05	Stature (body height) (mm)
+% % 19	Shoulder height, sitting (mm)
+% % 21	Shoulder-elbow length (mm)
+% % 29	Knee height (mm)
+% % 39	Foot length (mm)
+% % 53	Buttock-knee length (mm)
+% % Z_test = [40	1668    575 353 522 285 563];
+% % Z_test = [40	1781    610 378 566 304 614];
+% Z_test = [40	1894    644 401 610 322 666];
+
+% age = Z_test(1); % (year) Ex. 41
+% stature = Z_test(2); % (mm) Ex. 1633 el. 1880
+
 
 addpath('./scripts/');
 addpath('./scripts/utils/');
 r = meshRegions(); lm = lmIndices(); jc = jcIndices();
 anthroMeasurements = anthroRegression(sex, pred_id, Z_test);
+
+% weight = anthroMeasurements(2); % (kg) Ex. 73 el. 82
 
 t = datetime('now','TimeZone','local','Format','yyMMdd');
 if sex == 1
@@ -38,9 +82,12 @@ end
 
 meshModel = meshSymmetry(meshModel, adjustedLM); disp('Adjusted mesh to get symmetry.'); % Correction to get symmetry on both sides of sagittal plane
 % saveMesh(meshModel,[modelName,'_Symmetry']); % Meshmodel after body shape have been made symmetrical.
+meshModel = reduceCrotch(meshModel, adjustedLM); disp('Adjusted mesh to reduce excess crotch protrusion.');
 
 [jointCenter, meshModel] = jcPrediction(meshModel,adjustedLM,sex,weight,stature);
 % saveMesh(meshModel,[modelName,'_jcPred']); % Meshmodel after prediction of joint centres and adjustment of hand mesh.
+meshModelA = meshModel;
+jointCenterA = jointCenter;
 
 [meshModel,adjustedLM,jointCenterT] = rotateArmTpose(meshModel,adjustedLM,jointCenter);
 % saveMesh(meshModel,[modelName,'_rotateArm']); % Meshmodel after arms have been rotated into a T-pose.
@@ -54,7 +101,6 @@ scalingRatio = stature/maxHt;
 meshModel = scalingRatio*meshModel;
 adjustedLM = scalingRatio*adjustedLM;
 jointCenterT = scalingRatio*jointCenterT;
-saveMesh(meshModel,[modelName,'_Scaled']); % Meshmodel after scaling based on stature value.
 
 %% Additional points, make into functions for specific usages (modelling and driver ergonomics etc.)
 %%% Calculate midpoint for joints on lower arms and legs %%% 
@@ -114,17 +160,35 @@ closeT8 = closeT8(1:findClose-1,:);
 backT8 = mean(closeT8(:,2));
 adjustedLM(lm.T8,:) = [backT8    0   kT8Inv*backT8+mT8Inv];
 
+%% CENTRE MANIKIN AROUND L5/S1 %%
+meshModel = meshModel-jointCenterT(jc.L5S1,:);
+adjustedLM = adjustedLM-jointCenterT(jc.L5S1,:);
+jointCenterT = jointCenterT-jointCenterT(jc.L5S1,:);
 
 %% ROTATE MANIKIN TO Y=UP %%
 meshModel = [meshModel(:,1) meshModel(:,3) -meshModel(:,2)];
 jointCenterT = [jointCenterT(:,1) jointCenterT(:,3) -jointCenterT(:,2)];
 adjustedLM = [adjustedLM(:,1) adjustedLM(:,3) -adjustedLM(:,2)];
 
+saveMesh(meshModel,[modelName,'_Scaled']); % Meshmodel after scaling based on stature value.
 morphedMatchedMesh = saveMeshTpose(meshModel,modelName,sex); % Now returns the matchedMesh
+
+meshModelA = scalingRatio*meshModelA;
+meshModelA = [meshModelA(:,1) meshModelA(:,3) -meshModelA(:,2)];
+jointCenterA = scalingRatio*jointCenterA;
+jointCenterA = [jointCenterA(:,1) jointCenterA(:,3) -jointCenterA(:,2)];
+saveMesh(meshModelA,[modelName,'_Apose']); % Meshmodel after scaling based on stature value.
+saveXYZ(jointCenterA,[modelName,'_Apose'],0);
+% modelNameA = [manikinSex,char(t),'_',int2str(anthroMeasurements(1)),'_',int2str(anthroMeasurements(2)),'_',int2str(anthroMeasurements(3)),'_Apose']; %Automatically generates a suitable file-name.
+% morphedMatchedMeshA = saveMeshTpose(meshModelA,modelNameA,sex); % Now returns the matchedMesh
+
 
 %% Create XYZ files for landmarks and joint centres %%
 saveXYZ(adjustedLM,modelName,1);
 saveXYZ(jointCenterT,modelName,0);
+
+armaName = [manikinSex,int2str(anthroMeasurements(1)),'_',int2str(anthroMeasurements(2)),'_',int2str(anthroMeasurements(3))]; %Automatically generates a suitable file-name.
+saveJointCSV(jointCenterT,armaName);
 
 % clf;
 % plot3(meshModel(r.headNeck,1),meshModel(r.headNeck,2),meshModel(r.headNeck,3),'ko','MarkerEdgeColor','k','MarkerFaceColor','k','MarkerSize',1); hold on;
