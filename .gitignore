@@ -1,0 +1,14 @@
+*.asv
+Matlab/output/
+Matlab/sample/
+Blender
+Matlab/HBM_0014.m
+Matlab/manikinBodyModel.m
+Matlab/statMakeHuman_2026.m
+Matlab/genericBodyModel.m
+Matlab/genericBodyModel_Toes.m
+Matlab/makeHumanBodyModel.m
+Matlab/mainInput_IPS.m
+Matlab/scripts/meshTofingerJC.mat
+Matlab/scripts/alignRibCage.m
+

@@ -1,6 +1,10 @@
 % [1] Hara, R. et al. (2016). Predicting the location of the hip joint centres, impact of age group and sex.
 % Coordinate system: X = 1 (back/forth), Y = 2 (left/right), Z = 3 (up/down)
-
+% jcPredictionNimbleReg: copy of jcPredictionRtHandReg.m (2026-09-29) with two changes only:
+%   1. the hand regressor R is loaded from alternatives/rightHandJointRegressorsR_nimble.mat
+%      (trainNimbleHandRegressor.m: NIMBLE fitted to 36 SBSP hands, computeRegressor format)
+%   2. the pinky-top mesh fix is removed (redundant with the offset-based regressor)
+% The Dactylion step and everything else are unchanged.
 function [jointCenter, meshModel] = jcPrediction(meshModel, adjustedLM,sex,bWeight,bStature)
     r = meshRegions(); lm = lmIndices(); jc = jcIndices();
 %     BMI = bWeight/(bStature/1000)^2;
@@ -222,53 +226,19 @@ function [jointCenter, meshModel] = jcPrediction(meshModel, adjustedLM,sex,bWeig
     jointCenter(jc.RtWrist,:) = (adjustedLM(lm.RtRadialStyloid,:)+adjustedLM(lm.RtUlnarStyloid,:))./2;
     jointCenter(jc.LtWrist,:) = (adjustedLM(lm.LtRadialStyloid,:)+adjustedLM(lm.LtUlnarStyloid,:))./2;
 
-    %%% HAND JOINT CENTRES %%% <------ Adds joints in both hands and adjust mesh and joints to be aligned and symmetrical.
     load_handJointRegressors = load('statBodyModel/rightHandJointRegressors.mat');
-    W = load_handJointRegressors.W;
+    R = load_handJointRegressors.R;
     handMesh = meshModel(r.rightArmHand,:);
-    jointCenter(jc.RtIndexCarpal:jc.RtThumbDist,:) = W * handMesh;
+    jointCenter(jc.RtIndexCarpal:jc.RtThumbDist,:) = applyRegressor(R, handMesh);
 %     % Copy JCs from RIGHT to LEFT side
     jointCenter(jc.LtIndexCarpal:jc.LtThumbDist,:) = jointCenter(jc.RtIndexCarpal:jc.RtThumbDist,:);
     jointCenter(jc.LtIndexCarpal:jc.LtThumbDist,2) = jointCenter(jc.LtIndexCarpal:jc.LtThumbDist,2)*-1;
    
     %% insideHand = [1.insidePalm, 2.insideThumb, 3.insideIndex, 4.insideMiddle, 5.insideRing, 6.insidePinky];
     insideHandTotalRight = load('insideHandRight.mat').insideHandTotalRight;
-    insideHandTotalLeft = load('insideHandLeft.mat').insideHandTotalLeft;
+    % insideHandTotalLeft = load('insideHandLeft.mat').insideHandTotalLeft;
     
-    % timePinkyFixStart = tic;
-    %% Fixing pinky top (left & right), time approx. 0.0045 sec
-    % Fixing left pinky top
-    meshStart = r.leftArmHand(1);
-    inside = insideHandTotalLeft(:,6);
-    maxLength = sqrt(sum((jointCenter(jc.LtPinkyDist,:) - jointCenter(jc.LtPinkyProx,:)).^ 2));
-    minDistId = 1331; % Found earlier.
-    fingerDiff = jointCenter(jc.LtPinkyDist,:) - meshModel(minDistId+meshStart-1,:);
-    for i=1:size(inside,1)
-        if inside(i)
-            fingerTipDist = sqrt(sum((meshModel(minDistId+meshStart-1,:) - meshModel(i+meshStart-1,:)) .^ 2)); % Calculate how close to the mesh finger tip.
-            heatIndxPoint = 1-(fingerTipDist/maxLength);
-            if heatIndxPoint>0
-                meshModel(i+meshStart-1,:) = meshModel(i+meshStart-1,:) + fingerDiff*heatIndxPoint;
-            end
-        end
-    end
-    
-    % Fixing right pinky top
-    meshStart = r.rightArmHand(1);
-    inside = insideHandTotalRight(:,6);
-    maxLength = sqrt(sum((jointCenter(jc.RtPinkyDist,:) - jointCenter(jc.RtPinkyProx,:)).^ 2));
-    minDistId = 1129; % Found earlier.
-    fingerDiff = jointCenter(jc.RtPinkyDist,:) - meshModel(minDistId+meshStart-1,:);
-    for i=1:size(inside,1)
-        if inside(i)
-            fingerTipDist = sqrt(sum((meshModel(minDistId+meshStart-1,:) - meshModel(i+meshStart-1,:)) .^ 2)); % Calculate how close to the mesh finger tip.
-            heatIndxPoint = 1-(fingerTipDist/maxLength);
-            if heatIndxPoint>0
-                meshModel(i+meshStart-1,:) = meshModel(i+meshStart-1,:) + fingerDiff*heatIndxPoint;
-            end
-        end
-    end  
-    
+    % (pinky-top fix removed: redundant with the offset-based regressor)
     %% insideHand = [1.insidePalm, 2.insideThumb, 3.insideIndex, 4.insideMiddle, 5.insideRing, 6.insidePinky];
     fingerDiff = adjustedLM(lm.RtDactylion,:) - jointCenter(jc.RtMiddleDist,:);  % Check distance between middle distal and dactylion
     % This computes the delta for the middle finger and applies the same vector to INDEX, MIDDLE, and RING fingers. It is intentional (treating dactylion as a hand-wide reference)

@@ -342,6 +342,19 @@ function [meshModel, adjustedLM, jointCenter] = rotateArmTpose(meshModel, adjust
     jcChainTotal = jc.RtPinkyCarpal:jc.RtPinkyDist;
     [meshModel, jointCenter] = parallelFingers(meshStart, meshEnd, jcChainTotal, meshModel, jointCenter, insideHandTotalRight(:,6));
 
+
+    %% Thumb posture
+    thumbOpts.inPlaneDeg = 25;    % spread from the finger direction, in the palm plane, towards the thumb side
+    thumbOpts.palmarDeg  = 3;     % lift out of the palm plane, towards the palm side
+    thumbOpts.twistDeg   = 45;    % twist about the thumb axis, nail turning towards the thumb side
+    thumbOpts.twistFrom  = 'MCP'; % where the twist begins: 'CMC', 'MCP' or a number (0 = CMC, 1 = MCP)
+
+    hand     = handFrame(jointCenter, jc);
+    thumbIdx = maskToMeshIdx(insideHandTotalRight(:,2), meshStart, meshEnd);
+    palmIdx  = maskToMeshIdx(insideHandTotalRight(:,1) & ~insideHandTotalRight(:,2), meshStart, meshEnd);
+    [meshModel, jointCenter] = positionThumb(meshModel, jointCenter, jc, hand, thumbIdx, palmIdx, thumbOpts);
+    [meshModel, jointCenter] = twistThumb(meshModel, jointCenter, jc, hand, thumbIdx, thumbOpts);
+
     adjustedLM(lm.RtDactylion,:) = jointCenter(jc.RtMiddleDist,:);
 
     %% Copy right side values to left side
@@ -479,3 +492,117 @@ function [meshModel, jointCenter] = parallelFingers(meshStart, meshEnd, jcChainT
     end
     jointCenter(jcChainTotal(2):jcChainTotal(end), :) = (R * (jointCenter(jcChainTotal(2):jcChainTotal(end), :) - jcStart)')' + jcStart;
 end
+
+function hand = handFrame(jointCenter, jc)
+    % Reference frame of the right hand, from the (already parallel) finger MCP and PIP joints:
+    %   dorsal    - normal of the plane fitted through the MCP and PIP joints, pointing away from the thumb MCP
+    %   fingerDir - mean MCP -> PIP direction, projected into that plane
+    %   radialDir - in-plane direction perpendicular to fingerDir, pointing towards the thumb
+    mcp = jointCenter([jc.RtIndexCarpal jc.RtMiddleCarpal jc.RtRingCarpal jc.RtPinkyCarpal],:);
+    pip = jointCenter([jc.RtIndexProx jc.RtMiddleProx jc.RtRingProx jc.RtPinkyProx],:);
+    P = [mcp; pip];
+    [~, ~, V] = svd(P - mean(P,1), 'econ');
+    dorsal = V(:,3)';
+    if dot(jointCenter(jc.RtThumbProx,:) - mean(mcp,1), dorsal) > 0
+        dorsal = -dorsal;
+    end
+    fingerDir = mean(pip - mcp, 1);
+    fingerDir = unit(fingerDir - dot(fingerDir, dorsal)*dorsal);
+    radialDir = cross(dorsal, fingerDir);
+    if dot(radialDir, jointCenter(jc.RtThumbDist,:) - jointCenter(jc.RtThumbCarpal,:)) < 0
+        radialDir = -radialDir;
+    end
+    hand = struct('dorsal', dorsal, 'fingerDir', fingerDir, 'radialDir', radialDir);
+end
+
+function [meshModel, jointCenter] = positionThumb(meshModel, jointCenter, jc, hand, thumbIdx, palmIdx, opts)
+    % Rotate the right thumb about its CMC so that the thumb axis (CMC -> tip) points opts.inPlaneDeg from the
+    % finger direction towards the thumb side, and opts.palmarDeg out of the palm plane towards the palm side.
+    % The rotation is the smallest one taking the current thumb axis onto that target direction.
+    % Thumb joints rotate rigidly. Mesh vertices rotate by weight*angle, where the weight rises smoothly from 0
+    % at the CMC to 1 at the thumb MCP (along the thumb axis), so the skin at the MCP moves with the joints.
+    % Palm vertices close to the thumb (within 0.3 x the CMC-MCP length) follow with a weight that fades to 0
+    % with distance, keeping the thenar/web smooth.
+    cmc = jointCenter(jc.RtThumbCarpal,:);
+    thumbDir = unit(jointCenter(jc.RtThumbDist,:) - cmc);
+    targetDir = cosd(opts.palmarDeg) * (cosd(opts.inPlaneDeg)*hand.fingerDir + sind(opts.inPlaneDeg)*hand.radialDir) ...
+              - sind(opts.palmarDeg) * hand.dorsal;
+
+    rotAxis = cross(thumbDir, targetDir);
+    if norm(rotAxis) < 1e-9, return; end   % already on target
+    angle = atan2(norm(rotAxis), dot(thumbDir, targetDir));
+    rotAxis = unit(rotAxis);
+
+    % Mesh: weight = distance fall-off (1 for thumb vertices) x position along the thumb axis
+    lenMC = norm(jointCenter(jc.RtThumbProx,:) - cmc);
+    sMCP = dot(jointCenter(jc.RtThumbProx,:) - cmc, thumbDir);   % MCP position along the thumb axis
+    palmFall = max(0, 1 - minDistToSet(meshModel(palmIdx,:), meshModel(thumbIdx,:)) / (0.3*lenMC));
+    idx = [thumbIdx; palmIdx];
+    along = smooth01((meshModel(idx,:) - cmc) * thumbDir' / sMCP);
+    w = [ones(numel(thumbIdx),1); palmFall] .* along;
+
+    % Joints: MCP, IP and tip rotate rigidly about the CMC
+    rows = [jc.RtThumbProx jc.RtThumbInter jc.RtThumbDist];
+    jointCenter(rows,:) = rotateAboutAxis(jointCenter(rows,:), cmc, rotAxis, angle);
+    meshModel(idx,:) = rotateAboutAxis(meshModel(idx,:), cmc, rotAxis, w*angle);
+end
+
+function [meshModel, jointCenter] = twistThumb(meshModel, jointCenter, jc, hand, thumbIdx, opts)
+    % Twist the right thumb about its axis (line CMC -> tip) by opts.twistDeg, "outwards": the thumb's dorsal
+    % (nail) side turns towards the thumb side of the hand. The mesh has no nail geometry, so the nail direction
+    % is estimated as the hand's dorsal direction, made perpendicular to the thumb axis.
+    % The twist weight rises smoothly from 0 at opts.twistFrom to 1 at the tip; mesh vertices and thumb joints
+    % are twisted by the weight at their own position along the axis.
+    if opts.twistDeg == 0, return; end
+    cmc = jointCenter(jc.RtThumbCarpal,:);
+    tip = jointCenter(jc.RtThumbDist,:);
+    thumbDir = unit(tip - cmc);
+
+    % Direction of the twist: positive if it turns the nail towards the thumb side
+    nailDir = unit(hand.dorsal - dot(hand.dorsal, thumbDir)*thumbDir);
+    radialPerp = hand.radialDir - dot(hand.radialDir, thumbDir)*thumbDir;
+    twistAngle = deg2rad(opts.twistDeg);
+    if dot(cross(thumbDir, nailDir), radialPerp) < 0
+        twistAngle = -twistAngle;
+    end
+
+    % Start of the twist: 'CMC' (0), 'MCP' (1) or a number = fraction of the way from CMC to MCP
+    startFrac = opts.twistFrom;
+    if ischar(startFrac) || isstring(startFrac)
+        switch upper(char(startFrac))
+            case 'CMC', startFrac = 0;
+            case 'MCP', startFrac = 1;
+            otherwise, error('rotateArmTpose:twistFrom', 'twistFrom must be ''CMC'', ''MCP'' or a number');
+        end
+    end
+    sStart = startFrac * dot(jointCenter(jc.RtThumbProx,:) - cmc, thumbDir);
+    sTip = dot(tip - cmc, thumbDir);
+    weight = @(P) smooth01(((P - cmc)*thumbDir' - sStart) / (sTip - sStart));
+
+    meshModel(thumbIdx,:) = rotateAboutAxis(meshModel(thumbIdx,:), cmc, thumbDir, weight(meshModel(thumbIdx,:))*twistAngle);
+    rows = [jc.RtThumbProx jc.RtThumbInter jc.RtThumbDist];
+    jointCenter(rows,:) = rotateAboutAxis(jointCenter(rows,:), cmc, thumbDir, weight(jointCenter(rows,:))*twistAngle);
+end
+
+function P = rotateAboutAxis(P, origin, k, theta)
+    % Rotate the rows of P about the line through origin with unit direction k (Rodrigues' formula).
+    % theta (rad) is a scalar or a column with one angle per row.
+    V = P - origin;
+    c = cos(theta);
+    P = origin + V.*c + cross(repmat(k, size(V,1), 1), V, 2).*sin(theta) + (V*k').*k.*(1 - c);
+end
+
+function idx = maskToMeshIdx(mask, meshStart, meshEnd)
+    % Mesh vertex indices of a hand-region mask (mask row 1 = vertex meshStart)
+    idx = find(mask) + meshStart - 1;
+    idx = idx(idx <= meshEnd);
+end
+
+function d = minDistToSet(A, B)
+    % Distance from each row of A to its nearest row of B
+    d = min(vecnorm(permute(A, [1 3 2]) - permute(B, [3 1 2]), 2, 3), [], 2);
+end
+
+function v = unit(v), v = v / norm(v); end
+
+function w = smooth01(s), s = min(1, max(0, s)); w = s.^2 .* (3 - 2*s); end
