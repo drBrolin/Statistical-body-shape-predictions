@@ -1,10 +1,7 @@
 % [1] Hara, R. et al. (2016). Predicting the location of the hip joint centres, impact of age group and sex.
 % Coordinate system: X = 1 (back/forth), Y = 2 (left/right), Z = 3 (up/down)
-% jcPredictionNimbleReg: copy of jcPredictionRtHandReg.m (2026-09-29) with two changes only:
-%   1. the hand regressor R is loaded from alternatives/rightHandJointRegressorsR_nimble.mat
-%      (trainNimbleHandRegressor.m: NIMBLE fitted to 36 SBSP hands, computeRegressor format)
-%   2. the pinky-top mesh fix is removed (redundant with the offset-based regressor)
-% The Dactylion step and everything else are unchanged.
+% Shoulder girdle (SC, AC, GH): shoulderAlt.m. Hand joints: offset-based regressor R
+% (statBodyModel/rightHandJointRegressors.mat, computeRegressor/applyRegressor format), then the Dactylion step.
 function [jointCenter, meshModel] = jcPrediction(meshModel, adjustedLM,sex,bWeight,bStature)
     r = meshRegions(); lm = lmIndices(); jc = jcIndices();
 %     BMI = bWeight/(bStature/1000)^2;
@@ -180,38 +177,9 @@ function [jointCenter, meshModel] = jcPrediction(meshModel, adjustedLM,sex,bWeig
     jointCenter(jc.RtToeTip,:) = adjustedLM(lm.RtDigitII,:);
     jointCenter(jc.LtToeTip,:) = adjustedLM(lm.LtDigitII,:);
 
-    % Sterno-clavicular joints
-    jointCenter(jc.RtSternoClavicular,1) = adjustedLM(lm.RtClavicale,1)-(adjustedLM(lm.Suprasternale,1)-adjustedLM(lm.RtClavicale,1))/2; % Going into the body half the distance as between Suprasternale and clavicle
-    jointCenter(jc.RtSternoClavicular,2) = adjustedLM(lm.RtClavicale,2); % Otherwise the same position as Clavicle LM
-    jointCenter(jc.RtSternoClavicular,3) = adjustedLM(lm.RtClavicale,3);
+    % Shoulder girdle: SC, AC and GH joints from the Acromion and Clavicale landmarks (shoulderAlt.m)
+    jointCenter = shoulderAlt(jointCenter, adjustedLM);
 
-    jointCenter(jc.LtSternoClavicular,1) = adjustedLM(lm.LtClavicale,1)-(adjustedLM(lm.Suprasternale,1)-adjustedLM(lm.LtClavicale,1))/2;
-    jointCenter(jc.LtSternoClavicular,2) = adjustedLM(lm.LtClavicale,2);
-    jointCenter(jc.LtSternoClavicular,3) = adjustedLM(lm.LtClavicale,3);
-    
-    acZR = (meshModel(5144,:)+meshModel(5145,:)+meshModel(5158,:)+meshModel(5254,:))/4;
-    acZL = (meshModel(4764,:)+meshModel(4765,:)+meshModel(4778,:)+meshModel(4874,:))/4;
-    acZ = (acZR+acZL)/2;
-
-    % AcromioClavicular joints
-    jointCenter(jc.RtAcromioClavicular,1) = adjustedLM(lm.RtAcromion,1); % Same position as Acromion
-    jointCenter(jc.RtAcromioClavicular,2) = adjustedLM(lm.RtAcromion,2)-0.22*(adjustedLM(lm.RtAcromion,2)-adjustedLM(lm.RtClavicale,2)); % Distance from Acromion in relation to Clavicle -0.175 originally from estimation on plastic skeleton
-    jointCenter(jc.RtAcromioClavicular,3) = acZ(3);
-
-    jointCenter(jc.LtAcromioClavicular,1) = adjustedLM(lm.LtAcromion,1);
-    jointCenter(jc.LtAcromioClavicular,2) = adjustedLM(lm.LtAcromion,2)-0.22*(adjustedLM(lm.LtAcromion,2)-adjustedLM(lm.LtClavicale,2));
-    jointCenter(jc.LtAcromioClavicular,3) = acZ(3);
-
-    % GlenoHumeral (Shoulder) joints
-    angleLM = atan((adjustedLM(lm.Cervicale,3)-adjustedLM(lm.Suprasternale,3))/(adjustedLM(lm.Cervicale,1)-adjustedLM(lm.Suprasternale,1)));
-    angleTot = angleLM-67*pi()/180;
-    jointCenter(jc.RtShoulder,1) = 0.48*C*cos(angleTot)+adjustedLM(lm.RtAcromion,1); % 0.42*C in Reed (~2000)
-    jointCenter(jc.RtShoulder,2) = adjustedLM(lm.RtAcromion,2)-(adjustedLM(lm.RtAcromion,2)-jointCenter(jc.RtAcromioClavicular,2))/2; % Right side
-    jointCenter(jc.RtShoulder,3) = 0.48*C*sin(angleTot)+adjustedLM(lm.RtAcromion,3);
-
-    jointCenter(jc.LtShoulder,1) = jointCenter(jc.RtShoulder,1);
-    jointCenter(jc.LtShoulder,2) = adjustedLM(lm.LtAcromion,2)-(adjustedLM(lm.LtAcromion,2)-jointCenter(jc.LtAcromioClavicular,2))/2; % Left side
-    jointCenter(jc.LtShoulder,3) = jointCenter(jc.RtShoulder,3);
 
     % Elbow joints
 %     midPoint(1:3) = (adjustedLM(lm.RtHumeralLateralEpicn,:)+adjustedLM(lm.RtHumeralMedialEpicn,:))/2;
@@ -226,6 +194,7 @@ function [jointCenter, meshModel] = jcPrediction(meshModel, adjustedLM,sex,bWeig
     jointCenter(jc.RtWrist,:) = (adjustedLM(lm.RtRadialStyloid,:)+adjustedLM(lm.RtUlnarStyloid,:))./2;
     jointCenter(jc.LtWrist,:) = (adjustedLM(lm.LtRadialStyloid,:)+adjustedLM(lm.LtUlnarStyloid,:))./2;
 
+    % Hand joints: offset-based regressor (computeRegressor/applyRegressor format)
     load_handJointRegressors = load('statBodyModel/rightHandJointRegressors.mat');
     R = load_handJointRegressors.R;
     handMesh = meshModel(r.rightArmHand,:);
@@ -238,7 +207,6 @@ function [jointCenter, meshModel] = jcPrediction(meshModel, adjustedLM,sex,bWeig
     insideHandTotalRight = load('insideHandRight.mat').insideHandTotalRight;
     % insideHandTotalLeft = load('insideHandLeft.mat').insideHandTotalLeft;
     
-    % (pinky-top fix removed: redundant with the offset-based regressor)
     %% insideHand = [1.insidePalm, 2.insideThumb, 3.insideIndex, 4.insideMiddle, 5.insideRing, 6.insidePinky];
     fingerDiff = adjustedLM(lm.RtDactylion,:) - jointCenter(jc.RtMiddleDist,:);  % Check distance between middle distal and dactylion
     % This computes the delta for the middle finger and applies the same vector to INDEX, MIDDLE, and RING fingers. It is intentional (treating dactylion as a hand-wide reference)

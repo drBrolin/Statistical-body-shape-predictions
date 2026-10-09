@@ -2,44 +2,26 @@ clearvars; clc;
 
 tic
 
-% %% Lightness - start
-% sex = 1; % Female = 1, Male = 0
-% % Predictive anthropometric variables, possible to change. See measurement list below.
-% pred_id = [3 4 5 55 56 65]; % Age = 3, Weight = 4, Stature = 5, Chest circumference = 55, Waist circumference = 56 Bustpoint breadth = 65
-% 
-% % age = 27; % (year) Ex. 41
-% % stature = 1646; % (mm) Ex. 1633 el. 1880
-% % weight = 57.4; % (kg) Ex. 73 el. 82
-% 
-% age = 52; % (year) Ex. 41
-% stature = 1600; % (mm) Ex. 1633 el. 1880
-% weight = 75; % (kg) Ex. 73 el. 82
-% Chest_circumference = 1000; % Chest circumference (mm)
-% Waist_circumference = 700; %Waist circumference (mm)
-% Bustpoint_breadth = 200; % Bustpoint breadth (mm)
-% 
-% Z_test = [age weight stature Chest_circumference Waist_circumference Bustpoint_breadth]; % If predictive variables are changed, add them to this Z_test variable.
-% 
-% %% Lightness - end
-
 sex = 0; % Female = 1, Male = 0
 % Predictive anthropometric variables, possible to change. See measurement list below.
-pred_id = [3 4 5]; % Age = 3, Weight = 4, Stature = 5
+pred_id = [3 4 5 56]; % Age = 3, Weight = 4, Stature = 5
 
 % age = 27; % (year) Ex. 41
 % stature = 1646; % (mm) Ex. 1633 el. 1880
 % weight = 57.4; % (kg) Ex. 73 el. 82
 
 % Male, 41, 1880, 82
+% Female, 30, 1700, 65
+% Male, 30, 1800, 75
 age = 30; % (year) Ex. 41
 stature = 1800; % (mm) Ex. 1633 el. 1880
-weight = 200; % (kg) Ex. 73 el. 82
+weight = 90; % (kg) Ex. 73 el. 82
 
 % age = 30; % (year) Ex. 41
 % stature = 1750; % (mm) Ex. 1633 el. 1880
 % weight = 60; % (kg) Ex. 73 el. 82
 
-Z_test = [age weight stature]; % If predictive variables are changed, add them to this Z_test variable.
+Z_test = [age weight stature 750]; % If predictive variables are changed, add them to this Z_test variable.
 
 % pred_id = [3	5	19	21	29  39 53]; 
 % % 03	Age (year)
@@ -85,11 +67,12 @@ meshModel = meshSymmetry(meshModel, adjustedLM); disp('Adjusted mesh to get symm
 meshModel = reduceCrotch(meshModel, adjustedLM); disp('Adjusted mesh to reduce excess crotch protrusion.');
 
 [jointCenter, meshModel] = jcPrediction(meshModel,adjustedLM,sex,weight,stature);
-% saveMesh(meshModel,[modelName,'_jcPred']); % Meshmodel after prediction of joint centres and adjustment of hand mesh.
+
+% saveMesh(meshModels,[modelName,'_jcPred']); % Meshmodel after prediction of joint centres and adjustment of hand mesh.
 meshModelA = meshModel;
 jointCenterA = jointCenter;
 
-[meshModel,adjustedLM,jointCenterT] = rotateArmTpose(meshModel,adjustedLM,jointCenter);
+[meshModel,adjustedLM,jointCenterT] = rotateArmTpose(meshModel,adjustedLM,jointCenter); % arms, fingers and thumb into the T-pose
 % saveMesh(meshModel,[modelName,'_rotateArm']); % Meshmodel after arms have been rotated into a T-pose.
 
 [meshModel,adjustedLM,jointCenterT] = rotateFeetTpose(meshModel,adjustedLM,jointCenterT);

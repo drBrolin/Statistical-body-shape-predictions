@@ -28,7 +28,7 @@ function matchedMesh = saveMeshTpose(meshModel, modelName,sex)
     fclose(fid_in);
     allLines_orig = allLines_orig{1};
     
-    filename = ['output/', modelName, '_mesh_IAMU.obj'];
+    filename = ['output/', modelName, '_mesh_Body.obj'];
     if ~exist('output', 'dir'); mkdir('output'); end
     fid_out = fopen(filename,'w');
     if fid_out < 0; error('Could not open file for writing: %s', filename); end

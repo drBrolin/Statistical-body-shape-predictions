@@ -1,39 +1,55 @@
-function W = computeRegressor(meshModel, targetPoints, k)
-% computeRegressor  Compute a sparse linear regressor from mesh vertices to target points
+function R = computeRegressor(meshModel, targetPoints, k)
+% computeRegressor  Compute a sparse relation from mesh vertices to target points
 %
-% For each target point, finds the k nearest mesh vertices and solves for
-% interpolation weights such that W * meshModel approximates targetPoints.
+% For each target point the k nearest mesh vertices are stored together with
+% an inverse-distance weight AND the offset vector from the vertex to the
+% target point. Storing the offset is what lets the relation represent points
+% that do not lie on the mesh surface (joint centres inside the body, a target
+% mesh with a different topology, ...). A pure weighted average of vertices,
+% as used before, always collapses such points onto the surface hull.
+%
+% This is the same "distanceMeas" layout used by saveMeshTpose /
+% selectedMeshMorph, so the result can be saved and reused the same way.
 %
 % Inputs:
-%   meshModel    : Nx3 source mesh vertices
-%   targetPoints : Jx3 target points (joint centers, landmarks, or mesh vertices)
+%   meshModel    : Nx3 source (reference) mesh vertices
+%   targetPoints : Jx3 target points (joint centres, landmarks, mesh vertices)
 %   k            : number of nearest neighbours per target point
 %
 % Output:
-%   W : JxN regressor matrix
+%   R : J x 5*k relation matrix. For neighbour n = 1..k:
+%         R(:,(n-1)*5+1)     vertex index into meshModel
+%         R(:,(n-1)*5+2)     weight (1/distance)
+%         R(:,(n-1)*5+3:5)   offset: targetPoint - meshModel(index,:)
+%
+% Reconstruct with applyRegressor(R, deformedMesh). Units of meshModel and
+% targetPoints must match, and the mesh passed to applyRegressor must use the
+% same vertex ordering and units as meshModel here.
+%
+% See also applyRegressor, saveMeshTpose
 
     N = size(meshModel, 1);
     J = size(targetPoints, 1);
-    W = zeros(J, N);
+    k = min(k, N);
+
+    R = zeros(J, 5*k);
 
     for j = 1:J
         pt = targetPoints(j,:);
-        dist = sum((meshModel - pt).^2, 2);
-        [~, idx] = sort(dist);
+        diff = pt - meshModel;                 % Nx3, offsets vertex -> target
+        dist = sqrt(sum(diff.^2, 2));
+
+        [dSort, idx] = sort(dist);
         idx = idx(1:k);
-        % V = meshModel(idx,:);
-        % A = [V'; ones(1,k)];
-        % b = [pt'; 1];
-        % w = A \ b;
+        d = dSort(1:k);
 
-        d = dist(idx);
-        if any(d == 0)
-            w = double(d == 0);
-        else
-            w = 1 ./ d;
+        % A target sitting exactly on a vertex would give an infinite weight;
+        % clamp so the weight stays finite and dominates instead.
+        d = max(d, eps(class(d)));
+        w = 1 ./ d;
+
+        for n = 1:k
+            R(j,(n-1)*5+1:(n-1)*5+5) = [idx(n) w(n) diff(idx(n),:)];
         end
-
-        w = w / sum(w);
-        W(j, idx) = w';
     end
 end
