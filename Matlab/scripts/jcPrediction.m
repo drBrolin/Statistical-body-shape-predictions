@@ -181,14 +181,8 @@ function [jointCenter, meshModel] = jcPrediction(meshModel, adjustedLM,sex,bWeig
     jointCenter = shoulderAlt(jointCenter, adjustedLM);
 
 
-    % Elbow joints
-%     midPoint(1:3) = (adjustedLM(lm.RtHumeralLateralEpicn,:)+adjustedLM(lm.RtHumeralMedialEpicn,:))/2;
-%     jointCenter(jc.RtElbow,:) = (adjustedLM(lm.RtOlecranon,:)+midPoint(1:3))/2;
-    jointCenter(jc.RtElbow,:) = (adjustedLM(lm.RtHumeralLateralEpicn,:)+adjustedLM(lm.RtHumeralMedialEpicn,:))/2;
-
-%     midPoint(1:3) = (adjustedLM(lm.LtHumeralLateralEpicn,:)+adjustedLM(lm.LtHumeralMedialEpicn,:))/2;
-%     jointCenter(jc.LtElbow,:) = (adjustedLM(lm.LtOlecranon,:)+midPoint(1:3))/2;
-    jointCenter(jc.LtElbow,:) = (adjustedLM(lm.LtHumeralLateralEpicn,:)+adjustedLM(lm.LtHumeralMedialEpicn,:))/2;
+    % Elbow joints: from the epicondyle landmarks and the GH joints (elbowAlt.m)
+    jointCenter = elbowAlt(jointCenter, adjustedLM);
 
     % Wrist joints
     jointCenter(jc.RtWrist,:) = (adjustedLM(lm.RtRadialStyloid,:)+adjustedLM(lm.RtUlnarStyloid,:))./2;

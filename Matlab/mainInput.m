@@ -4,7 +4,7 @@ tic
 
 sex = 0; % Female = 1, Male = 0
 % Predictive anthropometric variables, possible to change. See measurement list below.
-pred_id = [3 4 5 56]; % Age = 3, Weight = 4, Stature = 5
+pred_id = [3 4 5]; % Age = 3, Weight = 4, Stature = 5
 
 % age = 27; % (year) Ex. 41
 % stature = 1646; % (mm) Ex. 1633 el. 1880
@@ -14,14 +14,14 @@ pred_id = [3 4 5 56]; % Age = 3, Weight = 4, Stature = 5
 % Female, 30, 1700, 65
 % Male, 30, 1800, 75
 age = 30; % (year) Ex. 41
-stature = 1800; % (mm) Ex. 1633 el. 1880
-weight = 90; % (kg) Ex. 73 el. 82
+stature = 1756; % (mm) Ex. 1633 el. 1880
+weight = 78; % (kg) Ex. 73 el. 82
 
 % age = 30; % (year) Ex. 41
 % stature = 1750; % (mm) Ex. 1633 el. 1880
 % weight = 60; % (kg) Ex. 73 el. 82
 
-Z_test = [age weight stature 750]; % If predictive variables are changed, add them to this Z_test variable.
+Z_test = [age weight stature]; % If predictive variables are changed, add them to this Z_test variable.
 
 % pred_id = [3	5	19	21	29  39 53]; 
 % % 03	Age (year)
