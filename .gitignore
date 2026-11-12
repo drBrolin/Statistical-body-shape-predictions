@@ -13,3 +13,7 @@ Matlab/scripts/meshTofingerJC.mat
 Matlab/scripts/alignRibCage.m
 
 Matlab/scripts/alternatives/
+
+# Separate repositories / working folders
+SBSP-MakeHuman-Blender-Plugin/
+BlenderColladaExport-Plugin/

@@ -23,6 +23,11 @@ weight = 78; % (kg) Ex. 73 el. 82
 
 Z_test = [age weight stature]; % If predictive variables are changed, add them to this Z_test variable.
 
+elbowTargetDeg = 8; % Elbow flexion (deg) in the T-pose, set by straightElbow before the arm rotation (joint-centre convention: GH-elbow-wrist, 0 = straight); [] = off (keep the predicted A-pose flexion, ~19-23 deg)
+% 8 for both sexes: no sex difference in active max extension (Doriot & Wang 2006). Not 0, because GH lies anterior of AC:
+% measured from AC, 0 deg reads as straight-to-overextended against the shoulder girdle; 8 deg is ~5-9 deg from AC (renderElbowTargets).
+forearmTwistDeg = 0; % Palm direction in the T-pose (deg), set by twistForearm (reference 'palm') before the arm rotation: 0 = palm straight down, + = palm turned forward; [] = off (keep the prediction: ~9-12 deg forward, ~0-7 deg backward after straightElbow 8)
+
 % pred_id = [3	5	19	21	29  39 53]; 
 % % 03	Age (year)
 % % 05	Stature (body height) (mm)
@@ -71,6 +76,15 @@ meshModel = reduceCrotch(meshModel, adjustedLM); disp('Adjusted mesh to reduce e
 % saveMesh(meshModels,[modelName,'_jcPred']); % Meshmodel after prediction of joint centres and adjustment of hand mesh.
 meshModelA = meshModel;
 jointCenterA = jointCenter;
+
+if ~isempty(elbowTargetDeg) % straighten the right elbow; rotateArmTpose mirrors the right arm to the left
+    [meshModel,adjustedLM,jointCenter,elbowInfo] = straightElbow(meshModel,adjustedLM,jointCenter,struct('targetDeg',elbowTargetDeg));
+    fprintf('Elbow flexion %.1f -> %.1f deg (carrying angle %.1f deg).\n', elbowInfo.flexBefore, elbowInfo.flexAfter, elbowInfo.carryBefore);
+end
+if ~isempty(forearmTwistDeg) % set the right forearm pronation/supination; rotateArmTpose mirrors it to the left
+    [meshModel,adjustedLM,jointCenter,twistInfo] = twistForearm(meshModel,adjustedLM,jointCenter,struct('targetDeg',forearmTwistDeg,'reference','palm'));
+    fprintf('Palm in the T-pose %.1f -> %.1f deg (forearm twist %.1f deg).\n', twistInfo.before, twistInfo.after, twistInfo.delta);
+end
 
 [meshModel,adjustedLM,jointCenterT] = rotateArmTpose(meshModel,adjustedLM,jointCenter); % arms, fingers and thumb into the T-pose
 % saveMesh(meshModel,[modelName,'_rotateArm']); % Meshmodel after arms have been rotated into a T-pose.
