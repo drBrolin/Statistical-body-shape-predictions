@@ -26,6 +26,7 @@ Z_test = [age weight stature]; % If predictive variables are changed, add them t
 elbowTargetDeg = 8; % Elbow flexion (deg) in the T-pose, set by straightElbow before the arm rotation (joint-centre convention: GH-elbow-wrist, 0 = straight); [] = off (keep the predicted A-pose flexion, ~19-23 deg)
 % 8 for both sexes: no sex difference in active max extension (Doriot & Wang 2006). Not 0, because GH lies anterior of AC:
 % measured from AC, 0 deg reads as straight-to-overextended against the shoulder girdle; 8 deg is ~5-9 deg from AC (renderElbowTargets).
+kneeMinFlexDeg = 1; % Minimum knee flexion (deg) in the standing prediction, kneeMinFlexion: knees below it get their joint centre moved forward to exactly this angle (mesh unchanged); [] = off (predicted -3.2..+3.9 deg)
 forearmTwistDeg = 0; % Palm direction in the T-pose (deg), set by twistForearm (reference 'palm') before the arm rotation: 0 = palm straight down, + = palm turned forward; [] = off (keep the prediction: ~9-12 deg forward, ~0-7 deg backward after straightElbow 8)
 
 % pred_id = [3	5	19	21	29  39 53]; 
@@ -72,6 +73,10 @@ meshModel = meshSymmetry(meshModel, adjustedLM); disp('Adjusted mesh to get symm
 meshModel = reduceCrotch(meshModel, adjustedLM); disp('Adjusted mesh to reduce excess crotch protrusion.');
 
 [jointCenter, meshModel] = jcPrediction(meshModel,adjustedLM,sex,weight,stature);
+if ~isempty(kneeMinFlexDeg) % no hyperextended knees: move the knee joint centre forward where needed
+    [jointCenter, kneeInfo] = kneeMinFlexion(jointCenter, adjustedLM, struct('minDeg', kneeMinFlexDeg));
+    fprintf('Knee flexion %.1f -> %.1f deg (joint centre moved %.1f mm forward).\n', kneeInfo(1).flexBefore, kneeInfo(1).flexAfter, kneeInfo(1).shift);
+end
 
 % saveMesh(meshModels,[modelName,'_jcPred']); % Meshmodel after prediction of joint centres and adjustment of hand mesh.
 meshModelA = meshModel;
